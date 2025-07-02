@@ -1,6 +1,7 @@
-# app.py
+
+
 import dash
-from dash import html, dcc, Input, Output, State
+from dash import html, dcc, Input, Output, State, ctx
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -32,13 +33,11 @@ min_date, max_date = df['created_at_format'].min(), df['created_at_format'].max(
 app = dash.Dash(__name__)
 app.title = "ITSM Dashboard"
 
-# CSS for clean design
-app.layout = html.Div(style={
-    'fontFamily': 'Segoe UI, sans-serif',
-    'backgroundColor': "#000000",
-    'padding': '20px'
-}, children=[
-    html.H2("ITSM Dashboard", style={'textAlign': 'center', 'color': "#ffffff"}),
+statuses = ['Open', 'Closed', 'In Progress', 'Resolved', 'Reopened', 'Under Observation']
+card_colors = ["#0b7912", "#dd321b", '#f39c12', '#3498db', '#9b59b6', '#1abc9c']
+
+app.layout = html.Div(style={'fontFamily': 'Segoe UI, sans-serif', 'backgroundColor': "#000000", 'padding': '20px'}, children=[
+    html.H2("ITSM Dashboard- SHYAM METALICS AND ENERGY LIMITED", style={'textAlign': 'center', 'color': "#ffffff"}),
 
     html.Div([
         dcc.Dropdown(
@@ -46,24 +45,21 @@ app.layout = html.Div(style={
             options=[{'label': i, 'value': i} for i in departments],
             placeholder="Select Department",
             multi=True,
-            style={'width': '180px','height': '8px'}
+            style={'width': '180px', 'height': '8px'}
         ),
         dcc.DatePickerRange(
             id='date-filter',
             start_date=min_date,
             end_date=max_date,
             display_format='DD/MM/YYYY',
-            style={'marginLeft': '10px', 'fontSize': '8px','height': '18px'}
+            style={'marginLeft': '10px', 'fontSize': '8px', 'height': '18px'}
         ),
         html.Button("Reset Filters", id='reset-button', n_clicks=0, style={'marginLeft': '20px', 'height': '38px'})
     ], style={'display': 'flex', 'gap': '10px', 'margin': '20px auto', 'justifyContent': 'center', 'marginTop': '50px'}),
 
-    html.Div(id='kpi-cards', style={
-        'display': 'flex',
-        'flexWrap': 'wrap',
-        'justifyContent': 'center',
-        'gap': '20px'
-    }),
+    dcc.Store(id='selected-status'),
+
+    html.Div(id='kpi-cards', style={'display': 'flex', 'flexWrap': 'wrap', 'justifyContent': 'center', 'gap': '20px'}),
 
     html.Div([
         dcc.Graph(id='tech-chart', style={'width': '33%'}),
@@ -86,59 +82,59 @@ app.layout = html.Div(style={
      Input('tech-chart', 'clickData'),
      Input('assigned-chart', 'clickData'),
      Input('age-chart', 'clickData'),
-     Input('reset-button', 'n_clicks')],
+     Input('reset-button', 'n_clicks'),
+     Input('selected-status', 'data')],
     [State('department-filter', 'value'),
      State('date-filter', 'start_date'),
      State('date-filter', 'end_date')]
 )
-def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_click, age_click, reset_click, state_dept, state_start, state_end):
-    ctx = dash.callback_context
-    triggered = ctx.triggered[0]['prop_id'].split('.')[0]
+def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_click, age_click, reset_click, status_filter, state_dept, state_start, state_end):
+    triggered = ctx.triggered_id
 
     if triggered == 'reset-button':
         dff = df.copy()
         dept_filter = []
         start_date = min_date
         end_date = max_date
+        status_filter = None
     else:
         dff = df.copy()
         if dept_filter:
             dff = dff[dff['department'].isin(dept_filter)]
         if start_date and end_date:
             dff = dff[(dff['created_at_format'] >= start_date) & (dff['created_at_format'] <= end_date)]
-
+        if status_filter:
+            dff = dff[dff['status'] == status_filter]
         if tech_click:
             tech_val = tech_click['points'][0]['y']
             dff = dff[dff['problem_category'] == tech_val]
-
         if assigned_click:
             assigned_val = assigned_click['points'][0]['y']
             dff = dff[dff['assigned_to_name'] == assigned_val]
-
         if age_click:
             age_val = age_click['points'][0]['x']
             dff = dff[dff['age_bucket'] == age_val]
 
-    statuses = ['Open', 'Closed', 'In Progress', 'Resolved', 'Reopened', 'Under Observation']
     kpis = [len(dff[dff['status'] == s]) for s in statuses]
-    card_colors = ["#0b7912", "#dd321b", '#f39c12', '#3498db', '#9b59b6', '#1abc9c']
     cards = [
-        html.Div([
+        html.Button([
             html.H3(str(count), style={'margin': 0, 'color': '#fff'}),
             html.P(label, style={'margin': 0, 'color': '#fff'})
-        ], style={
-            'padding': '15px 25px',
-            'background': card_colors[i % len(card_colors)],
-            'borderRadius': '10px',
-            'textAlign': 'center',
-            'minWidth': '130px', 'margin top': '30px'
-        }) for i, (label, count) in enumerate(zip(statuses, kpis))
+        ], id={'type': 'status-button', 'index': label},
+           style={
+               'padding': '15px 25px',
+               'background': card_colors[i % len(card_colors)],
+               'borderRadius': '10px',
+               'textAlign': 'center',
+               'minWidth': '130px',
+               'border': 'none',
+               'cursor': 'pointer'
+           }) for i, (label, count) in enumerate(zip(statuses, kpis))
     ]
 
     tech = dff[dff['status'].isin(['Open', 'In Progress'])]['problem_category'].value_counts().reset_index()
     tech.columns = ['Technician', 'Count']
-    tech = tech.sort_values(by='Count', ascending=True)
-    fig1 = px.bar(tech, x='Count', y='Technician', orientation='h', text='Count',
+    fig1 = px.bar(tech.sort_values(by='Count'), x='Count', y='Technician', orientation='h', text='Count',
                   title='Ticket Count by Technician', template='plotly_white')
     fig1.update_layout(margin=dict(l=20, r=20, t=50, b=20), plot_bgcolor='rgba(0,0,0,0)',
                        paper_bgcolor='rgba(0,0,0,0)', font_color='white',
@@ -146,7 +142,6 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
 
     assigned = dff['assigned_to_name'].value_counts().reset_index()
     assigned.columns = ['Assigned To', 'Count']
-    assigned = assigned.sort_values(by='Count', ascending=False)
     fig2 = px.bar(assigned.head(20), x='Count', y='Assigned To', orientation='h', text='Count',
                   title='Ticket by Assigned', template='plotly_white')
     fig2.update_layout(margin=dict(l=20, r=20, t=50, b=20), plot_bgcolor='rgba(0,0,0,0)',
@@ -162,6 +157,18 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
                        title_font_color='white', xaxis=dict(color='white'), yaxis=dict(color='white'))
 
     return cards, fig1, fig2, fig3, dept_filter, start_date, end_date
+
+# Callback to store clicked KPI status
+@app.callback(
+    Output('selected-status', 'data'),
+    Input({'type': 'status-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
+    State({'type': 'status-button', 'index': dash.dependencies.ALL}, 'id')
+)
+def update_status_filter(n_clicks_list, ids):
+    for n, i in zip(n_clicks_list, ids):
+        if n:
+            return i['index']
+    return dash.no_update
 
 if __name__ == '__main__':
     app.run(debug=True)
