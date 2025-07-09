@@ -1,5 +1,3 @@
-
-
 import dash
 from dash import html, dcc, Input, Output, State, ctx
 import pandas as pd
