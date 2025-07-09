@@ -1,0 +1,96 @@
+import requests
+import json
+import datetime
+import os
+import pandas as pd
+from requests.auth import HTTPBasicAuth
+
+# API Configuration
+API_URL = "https://apps.greenitco.com/shyammetalics/api/ticket-export"
+USERNAME = "greenitcoITM"
+PASSWORD = "gr@8N@hS#~44"
+APP_TOKEN = "A4uhcLJc1XrAbYUPyxEZlMChDcRzLWVj"  # Secret value
+
+# Headers setup
+HEADERS = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "apptoken": APP_TOKEN,
+}
+
+# Today's date
+date = datetime.datetime.now()
+today = date.strftime("%d-%m-%Y")
+
+# Paths
+json_file_path = r"C:/Users/1103775/OneDrive - SHYAM METALICS AND ENERGY LIMITED/json/device_data.json"
+excel_file_path = r"C:/Users/1103775/OneDrive - SHYAM METALICS AND ENERGY LIMITED/outputfile/SAP Tickets.xlsx"
+
+# Payload template
+PAYLOAD_TEMPLATE = {
+    "index": 1,
+    "list_size": 200,
+    "filters[based_on]": 1,
+    "filters[date_range]": f"24-07-2024 00:00:00 - {today} 23:59:59",
+}
+
+# Function to fetch data
+def fetch_data():
+    all_data = []
+    index = 1
+
+    while True:
+        try:
+            payload = PAYLOAD_TEMPLATE.copy()
+            payload["index"] = index
+
+            response = requests.post(
+                API_URL, headers=HEADERS, data=payload, auth=HTTPBasicAuth(USERNAME, PASSWORD)
+            )
+            print(f"Fetching data from page {index}...")
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success" and "data" in data:
+                    all_data.extend(data["data"])
+                    if not data.get("is_next_index"):
+                        break
+                    index += 1
+                else:
+                    print(f"Unexpected response structure: {data}")
+                    break
+            else:
+                print(f"HTTP Error: {response.status_code}, Message: {response.text}")
+                break
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}")
+            break
+
+    return all_data
+
+# Convert JSON to Excel
+def json_normalize():
+    if not os.path.exists(json_file_path):
+        print(f"JSON file not found at: {json_file_path}")
+        return
+
+    data = pd.read_json(json_file_path)
+    data.to_excel(excel_file_path, index=False)
+    print(f"Excel file saved at: {excel_file_path}")
+
+# Main Execution
+if __name__ == "__main__":
+    print(today)
+    print("Fetching data from the API...")
+    records = fetch_data()
+
+    if records:
+        # Ensure the JSON directory exists
+        os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
+        with open(json_file_path, "w") as json_file:
+            json.dump(records, json_file, indent=4)
+        print(f"Data saved to JSON at: {json_file_path}")
+    else:
+        print("No data fetched. Check API configuration.")
+
+    # Convert to Excel
+    json_normalize()
