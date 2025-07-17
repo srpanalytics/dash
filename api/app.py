@@ -32,39 +32,148 @@ app = dash.Dash(__name__)
 app.title = "ITSM Dashboard"
 
 statuses = ['Open', 'Closed', 'In Progress', 'Resolved', 'Reopened', 'Under Observation']
-card_colors = ["#0b7912", "#dd321b", '#f39c12', '#3498db', '#9b59b6', '#1abc9c']
+card_colors = ["#d4e0d5", "#d4e0d5", '#d4e0d5', '#d4e0d5', '#d4e0d5', '#d4e0d5']
 
-app.layout = html.Div(style={'fontFamily': 'Segoe UI, sans-serif', 'backgroundColor': "#000000", 'padding': '20px'}, children=[
-    html.H2("ITSM Dashboard- SHYAM METALICS AND ENERGY LIMITED", style={'textAlign': 'center', 'color': "#ffffff"}),
-
-    html.Div([
-        dcc.Dropdown(
-            id='department-filter',
-            options=[{'label': i, 'value': i} for i in departments],
-            placeholder="Select Department",
-            multi=True,
-            style={'width': '180px', 'height': '8px'}
+app.layout = html.Div(
+    style={
+        'fontFamily': 'Segoe UI, sans-serif',
+        'backgroundColor': '#0b0c2a',
+        'padding': '30px',
+        'minHeight': '100vh',
+        'color': '#f1f1f1'
+    },
+    children=[
+        html.H1(
+            "ITSM Dashboard",
+            style={
+                'textAlign': 'center',
+                'color': '#ffffff',
+                'marginBottom': '5px',
+                'fontSize': '36px',
+                'fontWeight': '600',
+                'letterSpacing': '1.5px'
+            }
         ),
-        dcc.DatePickerRange(
-            id='date-filter',
-            start_date=min_date,
-            end_date=max_date,
-            display_format='DD/MM/YYYY',
-            style={'marginLeft': '10px', 'fontSize': '8px', 'height': '18px'}
+        html.H4(
+            "Shyam Metalics and Energy Limited",
+            style={
+                'textAlign': 'center',
+                'color': '#bbbbbb',
+                'marginBottom': '40px',
+                'fontWeight': '300'
+            }
         ),
-        html.Button("Reset Filters", id='reset-button', n_clicks=0, style={'marginLeft': '20px', 'height': '38px'})
-    ], style={'display': 'flex', 'gap': '10px', 'margin': '20px auto', 'justifyContent': 'center', 'marginTop': '50px'}),
 
-    dcc.Store(id='selected-status'),
+        # Filter Bar
+        html.Div([
+            
+            dcc.DatePickerRange(
+                id='date-filter',
+                start_date=min_date,
+                end_date=max_date,
+                display_format='DD/MM/YYYY',
+                style={
+                    'backgroundColor': '#1e1e2f',
+                    'color': 'white',
+                    'border': '1px solid #444',
+                    'borderRadius': '8px',
+                    'padding': '6px 10px',
+                    'marginRight': '10px',
+                    'fontFamily': 'Segoe UI',
+                    'fontSize': '14px'
+                }
+            ),
 
-    html.Div(id='kpi-cards', style={'display': 'flex', 'flexWrap': 'wrap', 'justifyContent': 'center', 'gap': '20px'}),
 
-    html.Div([
-        dcc.Graph(id='tech-chart', style={'width': '33%'}),
-        dcc.Graph(id='assigned-chart', style={'width': '33%'}),
-        dcc.Graph(id='age-chart', style={'width': '33%'})
-    ], style={'display': 'flex', 'flexWrap': 'wrap', 'justifyContent': 'center', 'marginTop': '50px'})
-])
+            dcc.Dropdown(
+                id='department-filter',
+                options=[{'label': i, 'value': i} for i in departments],
+                placeholder="Select Department",
+                multi=True,
+                style={
+                    'minWidth': '220px',
+                    'borderRadius': '10px',
+                    'fontSize': '14px',
+                    'color': "#000000",              # Text color
+                    'backgroundColor': '#2c2c3e',    # Dropdown box background
+                    'border': '1px solid #555',
+                }
+            ),
+
+
+
+            html.Button("Reset Filters", id='reset-button', n_clicks=0, style={
+                'marginLeft': '10px',
+                'height': '38px',
+                'backgroundColor': '#e74c3c',
+                'color': '#fff',
+                'border': 'none',
+                'borderRadius': '10px',
+                'padding': '0 15px',
+                'cursor': 'pointer',
+                'fontWeight': '500'
+            })
+        ], style={
+            'display': 'flex',
+            'flexWrap': 'wrap',
+            'justifyContent': 'center',
+            'alignItems': 'center',
+            'gap': '15px',
+            'marginBottom': '40px'
+        }),
+
+        # Hidden Store
+        dcc.Store(id='selected-status'),
+
+        # KPI Cards
+        html.Div(
+            id='kpi-cards',
+            style={
+                'display': 'flex',
+                'flexWrap': 'wrap',
+                'justifyContent': 'center',
+                'gap': '20px',
+                'marginBottom': '40px'
+            }
+        ),
+
+        # Graph Section
+        html.Div([
+            html.Div(dcc.Graph(id='tech-chart'), style={
+                'backgroundColor': '#1f1f2e',
+                'padding': '15px',
+                'borderRadius': '15px',
+                'boxShadow': '0 4px 12px rgba(0,0,0,0.2)',
+                'flex': '1',
+                'minWidth': '300px'
+            }),
+            html.Div(dcc.Graph(id='assigned-chart'), style={
+                'backgroundColor': '#1f1f2e',
+                'padding': '15px',
+                'borderRadius': '15px',
+                'boxShadow': '0 4px 12px rgba(0,0,0,0.2)',
+                'flex': '1',
+                'minWidth': '300px'
+            }),
+            html.Div(dcc.Graph(id='age-chart'), style={
+                'backgroundColor': '#1f1f2e',
+                'padding': '15px',
+                'borderRadius': '15px',
+                'boxShadow': '0 4px 12px rgba(0,0,0,0.2)',
+                'flex': '1',
+                'minWidth': '300px'
+            })
+        ], style={
+            'display': 'flex',
+            'flexWrap': 'wrap',
+            'gap': '25px',
+            'justifyContent': 'center',
+            'marginBottom': '40px'
+        })
+    ]
+)
+
+
 
 @app.callback(
     [Output('kpi-cards', 'children'),
@@ -113,22 +222,43 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
             age_val = age_click['points'][0]['x']
             dff = dff[dff['age_bucket'] == age_val]
 
-    kpis = [len(dff[dff['status'] == s]) for s in statuses]
-    cards = [
-        html.Button([
-            html.H3(str(count), style={'margin': 0, 'color': '#fff'}),
-            html.P(label, style={'margin': 0, 'color': '#fff'})
-        ], id={'type': 'status-button', 'index': label},
-           style={
-               'padding': '15px 25px',
-               'background': card_colors[i % len(card_colors)],
-               'borderRadius': '10px',
-               'textAlign': 'center',
-               'minWidth': '130px',
-               'border': 'none',
-               'cursor': 'pointer'
-           }) for i, (label, count) in enumerate(zip(statuses, kpis))
-    ]
+    # kpis = [len(dff[dff['status'] == s]) for s in statuses]
+    kpi_df = df.copy()
+    if dept_filter:
+        kpi_df = kpi_df[kpi_df['department'].isin(dept_filter)]
+    if start_date and end_date:
+        kpi_df = kpi_df[(kpi_df['created_at_format'] >= start_date) & (kpi_df['created_at_format'] <= end_date)]
+
+    kpis = [len(kpi_df[kpi_df['status'] == s]) for s in statuses]
+
+    cards = []
+    for i, (label, count) in enumerate(zip(statuses, kpis)):
+        is_selected = status_filter == label
+        if is_selected:
+            bg_color = "#117508"
+            text_color = "#ECE7E7"
+            border = "3px solid #ffffff"
+        else: 
+            bg_color = "#CECFCD" if is_selected else card_colors[i % len(card_colors)]
+            text_color = "#ECE7E7" if is_selected else "#000000"
+            border = "3px solid #ffffff" if is_selected else "none"
+
+        cards.append(
+            html.Button([
+                html.H3(str(count), style={'margin': 0, 'color': text_color}),
+                html.P(label, style={'margin': 0, 'color': text_color})
+            ],
+            id={'type': 'status-button', 'index': label},
+            style={
+                'padding': '15px 25px',
+                'background': bg_color,
+                'borderRadius': '10px',
+                'textAlign': 'center',
+                'minWidth': '130px',
+                'border': border,
+                'cursor': 'pointer'
+            })
+        )
 
     tech = dff[dff['status'].isin(['Open', 'In Progress'])]['problem_category'].value_counts().reset_index()
     tech.columns = ['Technician', 'Count']
@@ -160,13 +290,22 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
 @app.callback(
     Output('selected-status', 'data'),
     Input({'type': 'status-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
-    State({'type': 'status-button', 'index': dash.dependencies.ALL}, 'id')
+    State({'type': 'status-button', 'index': dash.dependencies.ALL}, 'id'),
+    State('selected-status', 'data')
 )
-def update_status_filter(n_clicks_list, ids):
+def update_status_filter(n_clicks_list, ids, current_selected):
+    ctx_index = None
     for n, i in zip(n_clicks_list, ids):
-        if n:
-            return i['index']
+        if n and n > 0:
+            ctx_index = i['index']
+            break
+    if ctx_index:
+        if ctx_index == current_selected:
+            return None  # Deselect
+        else:
+            return ctx_index  # New selection
     return dash.no_update
+
 
 if __name__ == '__main__':
     app.run(debug=True)
