@@ -2,4 +2,3 @@ dash
 pandas
 plotly
 openpyxl
-python-3.11.9

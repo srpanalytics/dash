@@ -8,10 +8,14 @@ from datetime import datetime
 EXCEL_PATH = r"C:/Users/1103775/Downloads/dash/data/SAP_Tickets.xlsx"
 df = pd.read_excel(EXCEL_PATH)
 df['created_at_format'] = pd.to_datetime(df['created_at_format'], errors='coerce')
+df['closed_at_format'] = pd.to_datetime(df['closed_at_format'], errors='coerce')
+df['tat_minutes'] = (df['closed_at_format'] - df['created_at_format']).dt.total_seconds() / 60
+
 df['status'] = df['status'].fillna("Unknown")
 df['problem_category'] = df['problem_category'].fillna("Unknown")
 df['assigned_to_name'] = df['assigned_to_name'].fillna("Unassigned")
 df['department'] = df['department'].fillna("Unknown")
+df['base_location_name'] = df['base_location_name'].fillna("Unknown")
 
 # Ageing
 today = pd.Timestamp.now()
@@ -25,6 +29,7 @@ df['age_bucket'] = df['age_days'].apply(
 )
 
 departments = sorted(df['department'].dropna().unique())
+locations = sorted(df['base_location_name'].dropna().unique())
 min_date, max_date = df['created_at_format'].min(), df['created_at_format'].max()
 
 # App init
@@ -43,6 +48,14 @@ app.layout = html.Div(
         'color': '#f1f1f1'
     },
     children=[
+        html.Div([
+        html.Img(src='../assets/logo.png', style={
+            'height': '60px',
+            'width': 'auto',
+            'marginRight': '20px'
+        }),
+    ], style={'position': 'absolute', 'top': '30px', 'left': '30px'}),
+
         html.H1(
             "ITSM Dashboard",
             style={
@@ -64,9 +77,7 @@ app.layout = html.Div(
             }
         ),
 
-        # Filter Bar
         html.Div([
-            
             dcc.DatePickerRange(
                 id='date-filter',
                 start_date=min_date,
@@ -84,7 +95,6 @@ app.layout = html.Div(
                 }
             ),
 
-
             dcc.Dropdown(
                 id='department-filter',
                 options=[{'label': i, 'value': i} for i in departments],
@@ -94,13 +104,26 @@ app.layout = html.Div(
                     'minWidth': '220px',
                     'borderRadius': '10px',
                     'fontSize': '14px',
-                    'color': "#000000",              # Text color
-                    'backgroundColor': '#2c2c3e',    # Dropdown box background
+                    'color': "#000000",
+                    'backgroundColor': '#2c2c3e',
                     'border': '1px solid #555',
                 }
             ),
 
-
+            dcc.Dropdown(
+                id='location-filter',
+                options=[{'label': i, 'value': i} for i in locations],
+                placeholder="Select Location",
+                multi=True,
+                style={
+                    'minWidth': '220px',
+                    'borderRadius': '10px',
+                    'fontSize': '14px',
+                    'color': "#000000",
+                    'backgroundColor': '#2c2c3e',
+                    'border': '1px solid #555',
+                }
+            ),
 
             html.Button("Reset Filters", id='reset-button', n_clicks=0, style={
                 'marginLeft': '10px',
@@ -122,10 +145,8 @@ app.layout = html.Div(
             'marginBottom': '40px'
         }),
 
-        # Hidden Store
         dcc.Store(id='selected-status'),
 
-        # KPI Cards
         html.Div(
             id='kpi-cards',
             style={
@@ -137,7 +158,6 @@ app.layout = html.Div(
             }
         ),
 
-        # Graph Section
         html.Div([
             html.Div(dcc.Graph(id='tech-chart'), style={
                 'backgroundColor': '#1f1f2e',
@@ -162,6 +182,14 @@ app.layout = html.Div(
                 'boxShadow': '0 4px 12px rgba(0,0,0,0.2)',
                 'flex': '1',
                 'minWidth': '300px'
+            }),
+            html.Div(dcc.Graph(id='tat-chart'), style={
+                'backgroundColor': '#1f1f2e',
+                'padding': '15px',
+                'borderRadius': '15px',
+                'boxShadow': '0 4px 12px rgba(0,0,0,0.2)',
+                'flex': '1',
+                'minWidth': '300px'
             })
         ], style={
             'display': 'flex',
@@ -173,19 +201,20 @@ app.layout = html.Div(
     ]
 )
 
-
-
 @app.callback(
     [Output('kpi-cards', 'children'),
      Output('tech-chart', 'figure'),
      Output('assigned-chart', 'figure'),
      Output('age-chart', 'figure'),
+     Output('tat-chart', 'figure'),
      Output('department-filter', 'value'),
      Output('date-filter', 'start_date'),
-     Output('date-filter', 'end_date')],
+     Output('date-filter', 'end_date'),
+     Output('location-filter', 'value')],
     [Input('department-filter', 'value'),
      Input('date-filter', 'start_date'),
      Input('date-filter', 'end_date'),
+     Input('location-filter', 'value'),
      Input('tech-chart', 'clickData'),
      Input('assigned-chart', 'clickData'),
      Input('age-chart', 'clickData'),
@@ -193,9 +222,10 @@ app.layout = html.Div(
      Input('selected-status', 'data')],
     [State('department-filter', 'value'),
      State('date-filter', 'start_date'),
-     State('date-filter', 'end_date')]
+     State('date-filter', 'end_date'),
+     State('location-filter', 'value')]
 )
-def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_click, age_click, reset_click, status_filter, state_dept, state_start, state_end):
+def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_click, assigned_click, age_click, reset_click, status_filter, state_dept, state_start, state_end, state_location):
     triggered = ctx.triggered_id
 
     if triggered == 'reset-button':
@@ -203,29 +233,33 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
         dept_filter = []
         start_date = min_date
         end_date = max_date
+        location_filter = []
         status_filter = None
     else:
         dff = df.copy()
         if dept_filter:
-            dff = dff[dff['department'].isin(dept_filter)]
+            dff = df[df['department'].isin(dept_filter)]
+        if location_filter:
+            dff = df[df['base_location_name'].isin(location_filter)]
         if start_date and end_date:
-            dff = dff[(dff['created_at_format'] >= start_date) & (dff['created_at_format'] <= end_date)]
+            dff = df[(df['created_at_format'] >= start_date) & (dff['created_at_format'] <= end_date)]
         if status_filter:
-            dff = dff[dff['status'] == status_filter]
+            dff = df[df['status'] == status_filter]
         if tech_click:
             tech_val = tech_click['points'][0]['y']
-            dff = dff[dff['problem_category'] == tech_val]
+            dff = df[df['problem_category'] == tech_val]
         if assigned_click:
             assigned_val = assigned_click['points'][0]['y']
-            dff = dff[dff['assigned_to_name'] == assigned_val]
+            dff = df[df['assigned_to_name'] == assigned_val]
         if age_click:
             age_val = age_click['points'][0]['x']
-            dff = dff[dff['age_bucket'] == age_val]
+            dff = df[df['age_bucket'] == age_val]
 
-    # kpis = [len(dff[dff['status'] == s]) for s in statuses]
     kpi_df = df.copy()
     if dept_filter:
         kpi_df = kpi_df[kpi_df['department'].isin(dept_filter)]
+    if location_filter:
+        kpi_df = kpi_df[kpi_df['base_location_name'].isin(location_filter)]
     if start_date and end_date:
         kpi_df = kpi_df[(kpi_df['created_at_format'] >= start_date) & (kpi_df['created_at_format'] <= end_date)]
 
@@ -234,15 +268,9 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
     cards = []
     for i, (label, count) in enumerate(zip(statuses, kpis)):
         is_selected = status_filter == label
-        if is_selected:
-            bg_color = "#117508"
-            text_color = "#ECE7E7"
-            border = "3px solid #ffffff"
-        else: 
-            bg_color = "#CECFCD" if is_selected else card_colors[i % len(card_colors)]
-            text_color = "#ECE7E7" if is_selected else "#000000"
-            border = "3px solid #ffffff" if is_selected else "none"
-
+        bg_color = "#117508" if is_selected else card_colors[i % len(card_colors)]
+        text_color = "#ECE7E7" if is_selected else "#000000"
+        border = "3px solid #ffffff" if is_selected else "none"
         cards.append(
             html.Button([
                 html.H3(str(count), style={'margin': 0, 'color': text_color}),
@@ -260,33 +288,70 @@ def update_dashboard(dept_filter, start_date, end_date, tech_click, assigned_cli
             })
         )
 
+    # 1. Technician Chart
     tech = dff[dff['status'].isin(['Open', 'In Progress'])]['problem_category'].value_counts().reset_index()
     tech.columns = ['Technician', 'Count']
-    fig1 = px.bar(tech.sort_values(by='Count'), x='Count', y='Technician', orientation='h', text='Count',
-                  title='Ticket Count by Technician', template='plotly_white')
-    fig1.update_layout(margin=dict(l=20, r=20, t=50, b=20), plot_bgcolor='rgba(0,0,0,0)',
-                       paper_bgcolor='rgba(0,0,0,0)', font_color='white',
-                       title_font_color='white', xaxis=dict(color='white'), yaxis=dict(color='white'))
+    fig1 = px.bar(
+        tech.sort_values(by='Count').tail(15),
+        x='Count', y='Technician', orientation='h', text='Count',
+        title='Ticket Count by Technician'
+    )
+    fig1.update_layout(
+        height=500, margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white', title_font_color='white',
+        xaxis=dict(color='white'), yaxis=dict(color='white', automargin=True)
+    )
 
+    # 2. Assigned To Chart
     assigned = dff['assigned_to_name'].value_counts().reset_index()
     assigned.columns = ['Assigned To', 'Count']
-    fig2 = px.bar(assigned.head(20), x='Count', y='Assigned To', orientation='h', text='Count',
-                  title='Ticket by Assigned', template='plotly_white')
-    fig2.update_layout(margin=dict(l=20, r=20, t=50, b=20), plot_bgcolor='rgba(0,0,0,0)',
-                       paper_bgcolor='rgba(0,0,0,0)', font_color='white',
-                       title_font_color='white', xaxis=dict(color='white'), yaxis=dict(color='white'))
+    fig2 = px.bar(
+        assigned.sort_values(by='Count').tail(15),
+        x='Count', y='Assigned To', orientation='h', text='Count',
+        title='Ticket by Assigned To'
+    )
+    fig2.update_layout(
+        height=500, margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white', title_font_color='white',
+        xaxis=dict(color='white'), yaxis=dict(color='white', automargin=True)
+    )
 
+    # 3. Ageing Chart
     age = dff['age_bucket'].value_counts().reset_index()
     age.columns = ['Age Group', 'Count']
-    fig3 = px.bar(age.sort_values('Age Group'), x='Age Group', y='Count', text='Count',
-                  title='Ticket by Ageing', template='plotly_white')
-    fig3.update_layout(margin=dict(l=20, r=20, t=50, b=20), plot_bgcolor='rgba(0,0,0,0)',
-                       paper_bgcolor='rgba(0,0,0,0)', font_color='white',
-                       title_font_color='white', xaxis=dict(color='white'), yaxis=dict(color='white'))
+    fig3 = px.bar(
+        age.sort_values('Age Group'), x='Age Group', y='Count', text='Count',
+        title='Ticket by Ageing'
+    )
+    fig3.update_layout(
+        height=500, margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white', title_font_color='white',
+        xaxis=dict(color='white'), yaxis=dict(color='white')
+    )
 
-    return cards, fig1, fig2, fig3, dept_filter, start_date, end_date
+    # 4. TAT Chart
+    tat_df = dff.dropna(subset=['tat_minutes'])
+    tat_avg = tat_df.groupby('assigned_to_name')['tat_minutes'].mean().reset_index()
+    tat_avg = tat_avg.sort_values(by='tat_minutes', ascending=False).head(15)
+    fig4 = px.bar(
+        tat_avg,
+        x='tat_minutes', y='assigned_to_name', orientation='h',
+        title='Avg TAT (minutes) by Assigned To',
+        text=tat_avg['tat_minutes'].round(1)
+    )
+    fig4.update_layout(
+        height=500, margin=dict(l=20, r=20, t=50, b=20),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white', title_font_color='white',
+        xaxis=dict(color='white'), yaxis=dict(color='white', automargin=True)
+    )
 
-# Callback to store clicked KPI status
+
+    return cards, fig1, fig2, fig3, fig4, dept_filter, start_date, end_date, location_filter
+
 @app.callback(
     Output('selected-status', 'data'),
     Input({'type': 'status-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
@@ -301,11 +366,10 @@ def update_status_filter(n_clicks_list, ids, current_selected):
             break
     if ctx_index:
         if ctx_index == current_selected:
-            return None  # Deselect
+            return None
         else:
-            return ctx_index  # New selection
+            return ctx_index
     return dash.no_update
-
 
 if __name__ == '__main__':
     app.run(debug=True)
