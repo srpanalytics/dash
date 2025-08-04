@@ -1,5 +1,6 @@
 import dash
 from dash import html, dcc, Input, Output, State, ctx
+import dash_table
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -9,7 +10,7 @@ EXCEL_PATH = r"C:/Users/1103775/Downloads/dash/data/SAP_Tickets.xlsx"
 df = pd.read_excel(EXCEL_PATH)
 df['created_at_format'] = pd.to_datetime(df['created_at_format'], errors='coerce')
 df['closed_at_format'] = pd.to_datetime(df['closed_at_format'], errors='coerce')
-df['tat_minutes'] = (df['closed_at_format'] - df['created_at_format']).dt.total_seconds() / 3600
+df['tat_minutes'] = (df['closed_at_format'] - df['created_at_format']).dt.total_seconds() / 60
 
 df['status'] = df['status'].fillna("Unknown")
 df['problem_category'] = df['problem_category'].fillna("Unknown")
@@ -18,7 +19,7 @@ df['department'] = df['department'].fillna("Unknown")
 df['base_location_name'] = df['base_location_name'].fillna("Unknown")
 
 today = pd.Timestamp.now()
-df['age_days'] = (today - df['created_at_format']).dt.days  
+df['age_days'] = (today - df['created_at_format']).dt.days
 df['age_bucket'] = df['age_days'].apply(
     lambda x: "> 180 Days" if x > 180 else
               "121 to 180 Days" if x > 120 else
@@ -150,7 +151,6 @@ app.layout = html.Div(
                 'marginBottom': '40px'
             }
         ),
-        # 2x2 grid of graphs
         html.Div([
             html.Div([
                 html.Div(dcc.Graph(id='tech-chart'), style={
@@ -203,37 +203,47 @@ app.layout = html.Div(
                 'marginBottom': '40px'
             }),
         ]),
+        html.Div(
+            id='detail-table-container',
+            style={'marginTop': '40px'}
+        )
     ]
 )
 
 @app.callback(
-    [Output('kpi-cards', 'children'),
-     Output('tech-chart', 'figure'),
-     Output('assigned-chart', 'figure'),
-     Output('age-chart', 'figure'),
-     Output('tat-chart', 'figure'),
-     Output('department-filter', 'value'),
-     Output('date-filter', 'start_date'),
-     Output('date-filter', 'end_date'),
-     Output('location-filter', 'value')],
-    [Input('department-filter', 'value'),
-     Input('date-filter', 'start_date'),
-     Input('date-filter', 'end_date'),
-     Input('location-filter', 'value'),
-     Input('tech-chart', 'clickData'),
-     Input('assigned-chart', 'clickData'),
-     Input('age-chart', 'clickData'),
-     Input('reset-button', 'n_clicks'),
-     Input('selected-status', 'data')],
-    [State('department-filter', 'value'),
-     State('date-filter', 'start_date'),
-     State('date-filter', 'end_date'),
-     State('location-filter', 'value')]
+    [
+        Output('kpi-cards', 'children'),
+        Output('tech-chart', 'figure'),
+        Output('assigned-chart', 'figure'),
+        Output('age-chart', 'figure'),
+        Output('tat-chart', 'figure'),
+        Output('department-filter', 'value'),
+        Output('date-filter', 'start_date'),
+        Output('date-filter', 'end_date'),
+        Output('location-filter', 'value'),
+        Output('detail-table-container', 'children'),
+    ],
+    [
+        Input('department-filter', 'value'),
+        Input('date-filter', 'start_date'),
+        Input('date-filter', 'end_date'),
+        Input('location-filter', 'value'),
+        Input('tech-chart', 'clickData'),
+        Input('assigned-chart', 'clickData'),
+        Input('age-chart', 'clickData'),
+        Input('reset-button', 'n_clicks'),
+        Input('selected-status', 'data')
+    ],
+    [
+        State('department-filter', 'value'),
+        State('date-filter', 'start_date'),
+        State('date-filter', 'end_date'),
+        State('location-filter', 'value')
+    ]
 )
 def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_click, assigned_click, age_click, reset_click, status_filter, state_dept, state_start, state_end, state_location):
     triggered = ctx.triggered_id
 
-    # Always apply filters (ALL must be included in dff for both cards and graphs)
     dff = df.copy()
     if triggered == 'reset-button':
         dept_filter = []
@@ -259,9 +269,8 @@ def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_cl
         age_val = age_click['points'][0]['x']
         dff = dff[dff['age_bucket'] == age_val]
 
-    # All KPI cards reflect fully filtered data
+    # KPI
     kpis = [len(dff[dff['status'] == s]) for s in statuses]
-
     cards = []
     for i, (label, count) in enumerate(zip(statuses, kpis)):
         is_selected = status_filter == label
@@ -285,7 +294,7 @@ def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_cl
             })
         )
 
-    # Technician chart
+    # Graphs
     tech = dff[dff['status'].isin(['Open', 'In Progress'])]['problem_category'].value_counts().reset_index()
     tech.columns = ['Technician', 'Count']
     fig1 = px.bar(
@@ -299,33 +308,22 @@ def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_cl
         paper_bgcolor='#222140',
         font_color='#f1f1f1',
         xaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888'
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888'
         ),
         yaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888',
-            automargin=True,
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888', automargin=True
         ),
         title={
             'text': fig1.layout.title.text,
-            'x': 0.5,
-            'xanchor': 'center',
+            'x': 0.5, 'xanchor': 'center',
             'font': dict(size=20, family='Segoe UI', color='#e9e9e9')
         },
-        margin=dict(l=40, r=20, t=60, b=35),
-        bargap=0.35,
-        showlegend=False
+        margin=dict(l=40, r=20, t=60, b=35), bargap=0.35, showlegend=False
     )
     fig1.update_traces(marker=dict(color='#1484af', line=dict(width=0)), textposition='auto', textfont_color='white')
 
-    # Assigned To chart
     assigned = dff['assigned_to_name'].value_counts().reset_index()
     assigned.columns = ['Assigned To', 'Count']
     fig2 = px.bar(
@@ -339,33 +337,22 @@ def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_cl
         paper_bgcolor='#222140',
         font_color='#f1f1f1',
         xaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888'
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888'
         ),
         yaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888',
-            automargin=True,
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888', automargin=True
         ),
         title={
             'text': fig2.layout.title.text,
-            'x': 0.5,
-            'xanchor': 'center',
+            'x': 0.5, 'xanchor': 'center',
             'font': dict(size=20, family='Segoe UI', color='#e9e9e9')
         },
-        margin=dict(l=40, r=20, t=60, b=35),
-        bargap=0.35,
-        showlegend=False
+        margin=dict(l=40, r=20, t=60, b=35), bargap=0.35, showlegend=False
     )
     fig2.update_traces(marker=dict(color='#b35a0b', line=dict(width=0)), textposition='auto', textfont_color='white')
 
-    # Ageing chart
     age = dff['age_bucket'].value_counts().reset_index()
     age.columns = ['Age Group', 'Count']
     fig3 = px.bar(
@@ -378,32 +365,22 @@ def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_cl
         paper_bgcolor='#222140',
         font_color='#f1f1f1',
         xaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888'
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888'
         ),
         yaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888'
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888'
         ),
         title={
             'text': fig3.layout.title.text,
-            'x': 0.5,
-            'xanchor': 'center',
+            'x': 0.5, 'xanchor': 'center',
             'font': dict(size=20, family='Segoe UI', color='#e9e9e9')
         },
-        margin=dict(l=40, r=20, t=60, b=35),
-        bargap=0.35,
-        showlegend=False
+        margin=dict(l=40, r=20, t=60, b=35), bargap=0.35, showlegend=False
     )
     fig3.update_traces(marker=dict(color='#287e6f', line=dict(width=0)), textposition='auto', textfont_color='white')
 
-    # TAT chart
     tat_df = dff.dropna(subset=['tat_minutes'])
     tat_avg = tat_df.groupby('assigned_to_name')['tat_minutes'].mean().reset_index()
     tat_avg = tat_avg.sort_values(by='tat_minutes', ascending=False).head(15)
@@ -419,33 +396,86 @@ def update_dashboard(dept_filter, start_date, end_date, location_filter, tech_cl
         paper_bgcolor='#222140',
         font_color='#f1f1f1',
         xaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888'
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888'
         ),
         yaxis=dict(
-            color='#f1f1f1',
-            showgrid=False,
-            zeroline=False,
-            showline=True,
-            linecolor='#888',
-            automargin=True,
+            color='#f1f1f1', showgrid=False, zeroline=False,
+            showline=True, linecolor='#888', automargin=True
         ),
         title={
             'text': fig4.layout.title.text,
-            'x': 0.5,
-            'xanchor': 'center',
+            'x': 0.5, 'xanchor': 'center',
             'font': dict(size=20, family='Segoe UI', color='#e9e9e9')
         },
-        margin=dict(l=40, r=20, t=60, b=35),
-        bargap=0.35,
-        showlegend=False
+        margin=dict(l=40, r=20, t=60, b=35), bargap=0.35, showlegend=False
     )
     fig4.update_traces(marker=dict(color='#d96389', line=dict(width=0)), textposition='auto', textfont_color='white')
 
-    return cards, fig1, fig2, fig3, fig4, dept_filter, start_date, end_date, location_filter
+    # Interactive Details Table Logic
+    detail_df = None
+    if tech_click:
+        selected_technician = tech_click['points'][0]['y']
+        detail_df = df[(df['problem_category'] == selected_technician) & df['status'].isin(['Open', 'In Progress'])]
+        if dept_filter:
+            detail_df = detail_df[detail_df['department'].isin(dept_filter)]
+        if location_filter:
+            detail_df = detail_df[detail_df['base_location_name'].isin(location_filter)]
+        if start_date and end_date:
+            detail_df = detail_df[(detail_df['created_at_format'] >= start_date) & (detail_df['created_at_format'] <= end_date)]
+        if status_filter:
+            detail_df = detail_df[detail_df['status'] == status_filter]
+    elif assigned_click:
+        selected_assignee = assigned_click['points'][0]['y']
+        detail_df = df[df['assigned_to_name'] == selected_assignee]
+        if dept_filter:
+            detail_df = detail_df[detail_df['department'].isin(dept_filter)]
+        if location_filter:
+            detail_df = detail_df[detail_df['base_location_name'].isin(location_filter)]
+        if start_date and end_date:
+            detail_df = detail_df[(detail_df['created_at_format'] >= start_date) & (detail_df['created_at_format'] <= end_date)]
+        if status_filter:
+            detail_df = detail_df[detail_df['status'] == status_filter]
+    elif age_click:
+        selected_age = age_click['points'][0]['x']
+        detail_df = df[df['age_bucket'] == selected_age]
+        if dept_filter:
+            detail_df = detail_df[detail_df['department'].isin(dept_filter)]
+        if location_filter:
+            detail_df = detail_df[detail_df['base_location_name'].isin(location_filter)]
+        if start_date and end_date:
+            detail_df = detail_df[(detail_df['created_at_format'] >= start_date) & (detail_df['created_at_format'] <= end_date)]
+        if status_filter:
+            detail_df = detail_df[detail_df['status'] == status_filter]
+    # TAT could also provide interactive details if desired, similar pattern
+
+    if detail_df is not None and not detail_df.empty:
+        columns = [
+            {'name': 'Ticket ID', 'id': 'ticket_id'},
+            {'name': 'Created', 'id': 'created_at_format'},
+            {'name': 'Status', 'id': 'status'},
+            {'name': 'Assigned To', 'id': 'assigned_to_name'},
+            {'name': 'Problem Category', 'id': 'problem_category'},
+            {'name': 'Department', 'id': 'department'},
+            {'name': 'Location', 'id': 'base_location_name'},
+        ]
+        data = detail_df[[
+            'ticket_id', 'created_at_format', 'status', 'assigned_to_name',
+            'problem_category', 'department', 'base_location_name'
+        ]].to_dict('records')
+        detail_table = dash_table.DataTable(
+            columns=columns,
+            data=data,
+            style_table={'overflowX': 'auto'},
+            style_header={'backgroundColor': '#222', 'color': '#f1f1f1', 'fontWeight': 'bold'},
+            style_cell={'color': '#0b0c2a', 'backgroundColor': "#fff"},
+            page_size=10
+        )
+    else:
+        detail_table = None
+
+    return cards, fig1, fig2, fig3, fig4, dept_filter, start_date, end_date, location_filter, detail_table
+
 
 @app.callback(
     Output('selected-status', 'data'),
