@@ -3,6 +3,8 @@ from dash import html, dcc, Input, Output, State, ctx
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+import os
+
 
 # Load Excel data
 EXCEL_PATH = r"data/SAP_Tickets.xlsx"
@@ -466,5 +468,19 @@ def update_status_filter(n_clicks_list, ids, current_selected):
             return ctx_index
     return dash.no_update
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8050))  # Default to 8050 for local dev
+    app.run_server(host="0.0.0.0", port=port)
+
+
+
+
+
+
+
+
+# if __name__ == '__main__':
+#     app.run(debug=True)
