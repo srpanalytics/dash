@@ -473,7 +473,7 @@ def update_status_filter(n_clicks_list, ids, current_selected):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))  # Default to 8050 for local dev
-    app.run_server(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port)
 
 
 
