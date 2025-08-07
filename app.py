@@ -5,7 +5,7 @@ import plotly.express as px
 from datetime import datetime
 
 # Load Excel data
-EXCEL_PATH = r"C:/Users/1103775/Downloads/dash/data/SAP_Tickets.xlsx"
+EXCEL_PATH = r"data/SAP_Tickets.xlsx"
 df = pd.read_excel(EXCEL_PATH)
 df['created_at_format'] = pd.to_datetime(df['created_at_format'], errors='coerce')
 df['closed_at_format'] = pd.to_datetime(df['closed_at_format'], errors='coerce')
